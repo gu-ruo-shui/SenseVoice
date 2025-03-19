@@ -10,6 +10,7 @@ from typing import List
 import torchaudio
 from fastapi import FastAPI, File, Form
 from fastapi.responses import HTMLResponse
+from funasr import AutoModel
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
 from typing_extensions import Annotated
 
@@ -27,12 +28,20 @@ class Language(str, Enum):
 
 
 model_dir = "iic/SenseVoiceSmall"
-m, kwargs = SenseVoiceSmall.from_pretrained(
-    model=model_dir, device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"), batch_size=64
-)
-m.eval()
+# m, kwargs = SenseVoiceSmall.from_pretrained(
+#     model=model_dir, device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"), batch_size=64
+# )
+# m.eval()
 
-print(kwargs)
+m = AutoModel(
+    model=model_dir,
+    trust_remote_code=True,
+    remote_code="./model.py",
+    vad_model="fsmn-vad",
+    vad_kwargs={"max_single_segment_time": 30000},
+    device="cuda:0",
+)
+
 
 regex = r"<\|.*\|>"
 
@@ -75,17 +84,19 @@ async def turn_audio_to_text(
         key = ["wav_file_tmp_name"]
     else:
         key = keys.split(",")
-    res = m.inference(
-        data_in=audios,
-        language=lang,  # "zh", "en", "yue", "ja", "ko", "nospeech"
-        use_itn=False,
-        ban_emo_unk=False,
-        key=key,
+    res = m.generate(
         fs=audio_fs,
-        **kwargs,
+        language="auto",  # 自动检测语言，也可以指定"zn"（中文）、"en"（英语）等
+        use_itn=True,  # 使用数字文本标准化
+        batch_size_s=60,  # 批处理大小（秒）
+        merge_vad=True,  # 合并语音活动检测
+        merge_length_s=15,  # 合并长度（秒）
+        key=key,
     )
+
     if len(res) == 0:
         return {"result": []}
+    print(res[0].keys())
     for it in res[0]:
         it["raw_text"] = it["text"]
         it["clean_text"] = re.sub(regex, "", it["text"], 0, re.MULTILINE)
