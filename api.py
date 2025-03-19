@@ -28,8 +28,7 @@ class Language(str, Enum):
 
 model_dir = "iic/SenseVoiceSmall"
 m, kwargs = SenseVoiceSmall.from_pretrained(
-    model=model_dir,
-    device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"),
+    model=model_dir, device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"), batch_size=64
 )
 m.eval()
 
