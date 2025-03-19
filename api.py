@@ -1,16 +1,19 @@
 # Set the device with environment, default is cuda:0
 # export SENSEVOICE_DEVICE=cuda:1
 
-import os, re
+import os
+import re
+from enum import Enum
+from io import BytesIO
+from typing import List
+
+import torchaudio
 from fastapi import FastAPI, File, Form
 from fastapi.responses import HTMLResponse
-from typing_extensions import Annotated
-from typing import List
-from enum import Enum
-import torchaudio
-from model import SenseVoiceSmall
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
-from io import BytesIO
+from typing_extensions import Annotated
+
+from model import SenseVoiceSmall
 
 
 class Language(str, Enum):
@@ -22,9 +25,15 @@ class Language(str, Enum):
     ko = "ko"
     nospeech = "nospeech"
 
+
 model_dir = "iic/SenseVoiceSmall"
-m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"))
+m, kwargs = SenseVoiceSmall.from_pretrained(
+    model=model_dir,
+    device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"),
+)
 m.eval()
+
+print(kwargs)
 
 regex = r"<\|.*\|>"
 
@@ -46,8 +55,13 @@ async def root():
     </html>
     """
 
+
 @app.post("/api/v1/asr")
-async def turn_audio_to_text(files: Annotated[List[bytes], File(description="wav or mp3 audios in 16KHz")], keys: Annotated[str, Form(description="name of each audio joined with comma")], lang: Annotated[Language, Form(description="language of audio content")] = "auto"):
+async def turn_audio_to_text(
+    files: Annotated[List[bytes], File(description="wav or mp3 audios in 16KHz")],
+    keys: Annotated[str, Form(description="name of each audio joined with comma")],
+    lang: Annotated[Language, Form(description="language of audio content")] = "auto",
+):
     audios = []
     audio_fs = 0
     for file in files:
@@ -64,7 +78,7 @@ async def turn_audio_to_text(files: Annotated[List[bytes], File(description="wav
         key = keys.split(",")
     res = m.inference(
         data_in=audios,
-        language=lang, # "zh", "en", "yue", "ja", "ko", "nospeech"
+        language=lang,  # "zh", "en", "yue", "ja", "ko", "nospeech"
         use_itn=False,
         ban_emo_unk=False,
         key=key,
